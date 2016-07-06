@@ -31,6 +31,9 @@
 
 package com.sony.timekeep;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.System;
@@ -45,6 +48,7 @@ public class TimeKeep extends BroadcastReceiver {
 	private static final String TAG = "TimeKeep-Receiver";
 	private static final String TIMEADJ_PROP = "persist.sys.timeadjust";
 	private static final String RTC_SINCE_EPOCH = "/sys/class/rtc/rtc0/since_epoch";
+	private static final String RTC_ATS_FILE = "/data/time/ats_2";
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
@@ -58,6 +62,7 @@ public class TimeKeep extends BroadcastReceiver {
 
 		Log.d(TAG, "Setting adjust property to " + seconds);
 		SystemProperties.set(TIMEADJ_PROP, Long.toString(seconds));
+		writeValue(RTC_ATS_FILE, Long.toString(seconds * 1000));
 	}
 
 	private long readEpoch() {
@@ -79,5 +84,27 @@ public class TimeKeep extends BroadcastReceiver {
 		}
 
 		return epoch;
+	}
+
+	private void writeValue(String filename, String value) {
+		FileOutputStream fos = null;
+		try {
+			fos = new FileOutputStream(new File(filename), false);
+			fos.write(value.getBytes());
+			fos.flush();
+		} catch (FileNotFoundException ex) {
+			Log.w(TAG, "file " + filename + " not found: " + ex);
+		} catch (IOException ex) {
+			Log.w(TAG, "IOException trying to sync " + filename + ": " + ex);
+		} finally {
+			if (fos != null) {
+				try {
+					Log.w(TAG, "file " + filename + ": " + value);
+					fos.close();
+				} catch (IOException ex) {
+					Log.w(TAG, "IOException while closing synced file: ", ex);
+				}
+			}
+		}
 	}
 }
