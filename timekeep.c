@@ -42,6 +42,7 @@
 #include <errno.h>
 
 #define RTC_SYS_FILE "/sys/class/rtc/rtc0/since_epoch"
+#define RTC_ATS_FILE "/data/time/ats_2"
 #define TIME_ADJUST_PROP "persist.sys.timeadjust"
 
 int read_epoch(unsigned long* epoch) {
@@ -70,6 +71,21 @@ int read_epoch(unsigned long* epoch) {
 	return res;
 }
 
+void restore_ats(unsigned long value) {
+	int fd, bytes;
+	char buffer[PROPERTY_VALUE_MAX];
+	value *= 1000;
+
+	bytes = snprintf(buffer, sizeof(buffer), "%lu", value);
+	fd = open(RTC_ATS_FILE, O_CREAT | O_RDWR, 0666);
+	if (fd >= 0) {
+		write(fd, buffer, bytes);
+		close(fd);
+	} else {
+		ALOGI("Can't restore " RTC_ATS_FILE);
+	}
+}
+
 int store_time() {
 	char prop[PROPERTY_VALUE_MAX];
 	unsigned long seconds = 0;
@@ -90,6 +106,7 @@ int store_time() {
 		} else {
 			seconds -= epoch_since;
 			snprintf(prop, PROPERTY_VALUE_MAX, "%lu", seconds);
+			restore_ats(seconds);
 			property_set(TIME_ADJUST_PROP, prop);
 			ALOGI("Time adjustment stored to property");
 			res = 0;
@@ -127,6 +144,7 @@ int restore_time() {
 		ALOGI("Failed to read from " RTC_SYS_FILE
 		      " (%d), bailing out", res);
 	} else {
+		restore_ats(time_adjust);
 		tv.tv_sec = epoch_since + time_adjust;
 		tv.tv_usec = 0;
 		res = settimeofday(&tv, NULL);
