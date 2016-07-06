@@ -42,6 +42,7 @@
 #include <errno.h>
 
 #define RTC_SYS_FILE "/sys/class/rtc/rtc0/since_epoch"
+#define RTC_ATS_FILE "/data/time/ats_2"
 #define TIME_ADJUST_PROP "persist.sys.timeadjust"
 
 int read_epoch(unsigned long* epoch) {
@@ -70,6 +71,20 @@ int read_epoch(unsigned long* epoch) {
 	return res;
 }
 
+void restore_ats(const char* value) {
+	int fd, bytes;
+	char buffer[PROPERTY_VALUE_MAX];
+
+	bytes = snprintf(buffer, sizeof(buffer), "%s", value);
+	fd = open(RTC_ATS_FILE, O_CREAT | O_RDWR, 0666);
+	if (fd >= 0) {
+		write(fd, buffer, bytes);
+		close(fd);
+	} else {
+		ALOGI("Can't restore " RTC_ATS_FILE);
+	}
+}
+
 int store_time() {
 	char prop[PROPERTY_VALUE_MAX];
 	unsigned long seconds = 0;
@@ -90,6 +105,7 @@ int store_time() {
 		} else {
 			seconds -= epoch_since;
 			snprintf(prop, PROPERTY_VALUE_MAX, "%lu", seconds);
+			restore_ats(prop);
 			property_set(TIME_ADJUST_PROP, prop);
 			ALOGI("Time adjustment stored to property");
 			res = 0;
@@ -112,6 +128,7 @@ int restore_time() {
 	if (strcmp(prop, "0") != 0) {
 		char *endp = NULL;
 		time_adjust = strtoul(prop, &endp, 10);
+		restore_ats(prop);
 		if (*endp != '\0') {
 			ALOGI("Property in " TIME_ADJUST_PROP
 			      " is not valid: %s (%d)", prop, errno);
